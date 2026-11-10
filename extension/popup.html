@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>提示词库一键收藏</title>
+<style>
+  body { margin: 0; width: 300px; font: 13px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f2328; background: #fff; }
+  .wrap { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 15px; margin: 0; }
+  .status { font-size: 12px; color: #888; }
+  .status.ok { color: #2b8a3e; }
+  .status.err { color: #c92a2a; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; padding: 8px 10px; }
+  .primary { border: none; background: #d9480f; color: #fff; font-weight: 600; }
+  .secondary { border: 1px solid #d0d7de; background: #f6f8fa; color: #1f2328; }
+  label { display: flex; align-items: center; gap: 8px; }
+  .muted { color: #888; font-size: 12px; line-height: 1.5; }
+  .row { display: flex; gap: 6px; }
+  input[type=text] { flex: 1; font: inherit; border: 1px solid #d0d7de; border-radius: 6px; padding: 6px 8px; min-width: 0; }
+  hr { border: none; border-top: 1px solid #eee; margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>提示词库一键收藏</h1>
+  <div id="status" class="status">正在连接本地提示词库…</div>
+  <button id="openPanel" class="primary">在当前网页打开收藏面板</button>
+  <button id="openLib" class="secondary">打开提示词库网页</button>
+  <hr>
+  <label><input type="checkbox" id="showFab"> 在网页上显示悬浮按钮</label>
+  <label><input type="checkbox" id="hideSite"> 在 <b id="siteName">此网站</b> 隐藏悬浮按钮</label>
+  <hr>
+  <div class="muted">本地库地址</div>
+  <div class="row"><input type="text" id="server"><button id="saveServer" class="secondary">保存</button></div>
+  <div class="muted">
+    用法：选中网页上的提示词，点悬浮按钮或按 Alt+Shift+Y；也可以在文字、图片、视频上点右键选“加入提示词库”。图片和视频只保存链接。
+  </div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

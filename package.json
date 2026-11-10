@@ -1,0 +1,17 @@
+{
+  "name": "prompt-library",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GPT-Image2 本地提示词库：浏览、收藏入库、参考图 + 目标智能生成提示词",
+  "scripts": {
+    "import": "node --disable-warning=ExperimentalWarning scripts/import.mjs",
+    "start": "node --disable-warning=ExperimentalWarning server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "cloud:sync": "node --disable-warning=ExperimentalWarning scripts/cloud-sync.mjs",
+    "pigments": "node --disable-warning=ExperimentalWarning scripts/build-pigments.mjs --translate"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

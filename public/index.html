@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提示词库 · GPT-Image2</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A8%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css?v=force_no_cache_final">
+  <style>
+    /* 工作台弹性自适应：输入框撑大但优先保证下方直连出图完整可见不被裁剪 */
+    .pp-workspace-body {
+      display: flex !important;
+      flex-direction: column !important;
+      height: 100% !important;
+      padding: 14px 16px 14px !important;
+      gap: 8px !important;
+      overflow-y: auto !important;
+      box-sizing: border-box !important;
+    }
+    .pp-workspace-body #pp-prompt-output {
+      width: 100% !important;
+      flex: 1 1 0% !important;
+      min-height: 200px !important;
+      border: var(--border-main) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 12px 14px !important;
+      font-size: 13.5px !important;
+      line-height: 1.6 !important;
+      resize: none !important;
+      background: var(--bg) !important;
+      color: var(--ink) !important;
+      outline: none !important;
+      box-sizing: border-box !important;
+    }
+    .pp-workspace-body .pp-dialect-bar {
+      margin: 0 !important;
+      flex-shrink: 0 !important;
+    }
+    .pp-workspace-body .pp-quick-actions {
+      margin: 0 !important;
+      flex-shrink: 0 !important;
+    }
+    .pp-workspace-body .pp-copy-banner-btn {
+      margin: 0 !important;
+      height: 38px !important;
+      flex-shrink: 0 !important;
+    }
+    .pp-workspace-body .pp-direct-box {
+      margin-top: auto !important;
+      margin-bottom: 2px !important;
+      background: var(--bg-subtle) !important;
+      border: var(--border-main) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 10px 12px 12px !important;
+      flex-shrink: 0 !important;
+    }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎨 提示词库</div>
+  <nav id="tabs">
+    <button data-tab="builder" class="active">🎨 挑词调色盘</button>
+    <button data-tab="browse">📦 案例库浏览</button>
+    <button data-tab="generate">✨ 智能扩写/反推</button>
+    <button data-tab="add">添加到库</button>
+    <button data-tab="templates">模板</button>
+    <button data-tab="settings">设置</button>
+  </nav>
+  <div class="topbar-actions" style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+    <div id="stats" class="stats"></div>
+    <button id="theme-toggle" class="ghost-btn" title="切换外观：自动 / 深色 / 白天" style="padding: 4px 10px; font-size: 12px;">🌓 自动</button>
+  </div>
+</header>
+
+<main>
+  <!-- 可视化调色盘 (三联驱动数据库联动模式) -->
+  <section id="tab-builder" class="tab active">
+    <div class="pp-layout-triad">
+      <!-- 第一栏大框：受控参数与调色盘 (等大框) -->
+      <div class="pp-col-left pp-column-box">
+        <div class="pp-column-header">
+          <span class="pp-num">①</span>
+          <span class="pp-head-title">受控参数调色盘</span>
+          <span class="pp-head-sub">PIGMENTS</span>
+          <span class="pp-count" id="pp-dict-stats" title="词典由 scripts/build-pigments.mjs 从本库受控词表与案例自由标签生成">—</span>
+        </div>
+        <div class="pp-column-body">
+          <!-- 步骤 1 主体 -->
+          <div class="pp-section-group">
+            <div class="pp-section-title">维度 DIMENSION</div>
+            <div class="pp-pills-row" id="pp-subject-pills"></div>
+          </div>
+
+          <!-- 步骤 2 类别 -->
+          <div class="pp-section-group">
+            <div class="pp-section-title">类别 CATEGORY</div>
+            <div class="pp-pills-row dashed" id="pp-category-pills"></div>
+          </div>
+
+          <!-- 步骤 3 标签颜料 -->
+          <div class="pp-section-group">
+            <div class="pp-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+              <span>标签颜料 PICK PIGMENTS</span>
+              <span class="pp-live-hint">⚡️ 点选即联动</span>
+            </div>
+            <div class="pp-pigments-grid" id="pp-pigment-tags"></div>
+          </div>
+
+          <!-- 步骤 4 语料新词候选：词表没收，但从本库语料挖出来且集中在本维度 -->
+          <div class="pp-section-group" id="pp-fresh-tags" hidden></div>
+        </div>
+      </div>
+
+      <!-- 第二栏大框：数据库实时案例灵感流 (等大框) -->
+      <div class="pp-col-mid pp-column-box">
+        <div class="pp-column-header">
+          <span class="pp-num green">②</span>
+          <span class="pp-head-title">实时案例透视</span>
+          <span class="pp-head-sub" id="pp-live-matched-tag">ALL / 推荐精选</span>
+          <label class="pp-sem-chk-label" title="开启高维向量余弦相似度匹配：按画面意境、概念与风格联想" style="margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; flex-shrink: 0;">
+            <input type="checkbox" id="pp-live-semantic-chk" style="cursor: pointer; accent-color: var(--blue);">
+            <span>🧠 向量意境</span>
+          </label>
+          <span class="pp-count" id="pp-live-matched-count" style="margin-left: 8px;">0 条案例</span>
+        </div>
+        <div class="pp-column-body pp-live-cases-stream" id="pp-live-cases-list"></div>
+      </div>
+
+      <!-- 第三栏大框：提示词工作台与直连出图 (等大框) -->
+      <div class="pp-col-right pp-column-box">
+        <div class="pp-column-header">
+          <span class="pp-num blue">③</span>
+          <span class="pp-head-title">提示词工作台</span>
+          <span class="pp-head-sub">WORKSPACE</span>
+          <span class="pp-count"><b id="pp-word-count">0</b> / 380</span>
+        </div>
+        <div class="pp-column-body pp-workspace-body" style="display: flex !important; flex-direction: column !important; flex: 1 !important; height: calc(100% - 48px) !important; padding: 14px 16px 14px !important; gap: 8px !important; overflow-y: auto !important; box-sizing: border-box !important;">
+          <!-- 固定标签动态展示栏：点选标签后动态以中英文卡片展示 -->
+          <div class="pp-fixed-tags-bar" id="pp-fixed-tags-bar">
+            <span class="pp-fixed-empty-hint">📌 已选固定标签（点选左侧标签在此动态显示中英文）</span>
+          </div>
+          <textarea id="pp-prompt-output" dir="ltr" spellcheck="false" placeholder="点左侧标签自动拼装，或从中间案例点击「导入参数」..." style="width: 100% !important; flex: 1 1 0% !important; min-height: 180px !important; border: var(--border-main) !important; border-radius: var(--radius-sm) !important; padding: 12px 14px !important; font-size: 13.5px !important; line-height: 1.6 !important; resize: none !important; background: var(--bg) !important; color: var(--ink) !important; outline: none !important; box-sizing: border-box !important;"></textarea>
+          <!-- 多模型方言切换条 -->
+          <div class="pp-dialect-bar" style="display: flex; gap: 4px; padding: 2px 4px; background: var(--bg-subtle); border-radius: 6px; border: var(--border-main); margin: 0 !important; flex-shrink: 0 !important;">
+            <button type="button" class="pp-dialect-btn active" data-dialect="gpt">GPT-Image2</button>
+            <button type="button" class="pp-dialect-btn" data-dialect="mj">Midjourney</button>
+            <button type="button" class="pp-dialect-btn" data-dialect="flux">Flux.1</button>
+            <button type="button" class="pp-dialect-btn" data-dialect="sdxl">SDXL权重</button>
+          </div>
+          <div class="pp-quick-actions" style="margin: 0 !important; flex-shrink: 0 !important;">
+            <button type="button" class="pp-action-btn" id="pp-act-lighting">人像布光</button>
+            <button type="button" class="pp-action-btn" id="pp-act-quality">画质优化</button>
+            <button type="button" class="pp-action-btn" id="pp-act-negative">负面词</button>
+            <button type="button" class="pp-action-btn" id="pp-act-ai">✨ 扩写微调</button>
+            <button type="button" class="pp-action-btn pp-clear" id="pp-act-clear">清空</button>
+          </div>
+          <button type="button" class="pp-copy-banner-btn" id="pp-btn-copy" style="margin: 0 !important; height: 40px !important; flex-shrink: 0 !important;">
+            📋 复制提示词
+          </button>
+
+          <!-- 网页版直连卡：紧靠底端，与黄色按钮紧凑相接 -->
+          <div class="pp-direct-box" style="margin-top: auto !important; margin-bottom: 0 !important; background: var(--bg-subtle) !important; border: var(--border-main) !important; border-radius: var(--radius-sm) !important; padding: 10px 12px !important; flex-shrink: 0 !important;">
+            <div class="pp-direct-head" style="display:flex; align-items:center; justify-content:space-between;">
+              <span>🌐 网页版 AI 实时直连出图</span>
+              <a href="/prompt-library-companion.user.js" target="_blank" class="pp-script-badge" title="在 Tampermonkey / ScriptCat 中一键安装自动回传插件" style="font-size:11px; color:var(--blue); text-decoration:none; font-weight:700;">📦 安装回传油猴脚本 ↗</a>
+            </div>
+            <div class="row buttons" style="margin-top: 8px; gap: 8px;">
+              <button type="button" class="draw-direct-btn gpt-draw" id="pp-btn-web-gpt" style="flex:1;">⚡ 唤起 ChatGPT</button>
+              <button type="button" class="draw-direct-btn gemini-draw" id="pp-btn-web-gemini" style="flex:1;">🎨 唤起 Gemini</button>
+            </div>
+            <p class="muted" style="margin: 6px 0 0; font-size: 11px; line-height: 1.4;">自动预填提示词；配套油猴脚本可在 ChatGPT/Gemini 网页端一键把图贴回库中。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 浏览案例 -->
+  <section id="tab-browse" class="tab">
+    <div class="filters-header">
+      <span class="filter-label">FILTERS / 快捷分类筛选</span>
+      <span class="filter-extra" id="total-count-pill"></span>
+    </div>
+    <div id="cat-chips" class="chips"></div>
+    <div id="sub-chips" class="chips sub" hidden></div>
+
+    <div class="search-strip">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="q" type="search" placeholder="搜索提示词、标题、风格、标签... (Ctrl + K)">
+      </div>
+      <div class="search-filters-wrap">
+        <select id="f-model"><option value="">全部模型</option></select>
+        <select id="f-media">
+          <option value="">全部媒体</option>
+          <option value="image">图片</option>
+          <option value="video">视频</option>
+        </select>
+        <select id="f-source">
+          <option value="">全部来源</option>
+          <option value="user">我添加的</option>
+          <option value="canghe">canghe 案例</option>
+          <option value="opennana">OpenNana</option>
+          <option value="github">GitHub 精选</option>
+        </select>
+        <label class="chk" title="仅显示结构完整、具备物理参数的黄金案例"><input type="checkbox" id="f-tier1" checked> ⭐️ 标杆</label>
+        <label class="chk"><input type="checkbox" id="f-fav"> 收藏</label>
+        <label class="chk"><input type="checkbox" id="f-review"> 待确认</label>
+        <label class="chk" id="f-sem-wrap" hidden><input type="checkbox" id="f-sem"> 语义搜</label>
+        <button id="facet-toggle" class="ghost-btn">16维筛选</button>
+      </div>
+    </div>
+    <div id="facet-panel" class="facet-panel" hidden></div>
+    <div id="facet-active" class="chips active-facets" hidden></div>
+
+    <div class="section-title">
+      <span class="section-heading-text">⚡️ 提示词精选</span>
+      <span id="result-info" class="result-counter"></span>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div class="pager"><button id="more" hidden>加载更多</button></div>
+  </section>
+  </section>
+
+  <!-- 智能生成 -->
+  <section id="tab-generate" class="tab">
+    <div class="two-col">
+      <div class="panel">
+        <h2>参考图 + 想要的效果 → 提示词</h2>
+        <div class="drop" id="gen-drop">
+          <input type="file" accept="image/*" hidden>
+          <div class="drop-hint">点击、拖拽或 Ctrl/⌘+V 粘贴参考图（可选）</div>
+          <img alt="" hidden>
+          <button class="clear" type="button" hidden>移除</button>
+        </div>
+        <label>想要达成的效果
+          <textarea id="gen-goal" rows="5" placeholder="例如：保留图中人物的长相，改成新中式水墨风的短剧宣传海报，标题“花刺”，9:16"></textarea>
+        </label>
+        <div id="gen-pins" class="pins"></div>
+        <div class="row">
+          <label>类别<select id="gen-cat"><option value="">自动判断</option></select></label>
+          <label>画幅<input id="gen-ar" placeholder="自动，如 9:16"></label>
+          <label>输出语言
+            <select id="gen-lang">
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+              <option value="both">中英双语</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>目标模型（决定提示词写法）<input id="gen-model" list="rev-models" placeholder="如 GPT Image 2.5 / Seedance 2.0"></label>
+          <label>大师与东方美学预设
+            <select id="gen-master-preset">
+              <option value="">（可选）注入大师光学与东方美学参数</option>
+            </select>
+          </label>
+          <label>用途
+            <select id="gen-output">
+              <option value="auto">自动（按目标模型判断）</option>
+              <option value="image">出图</option>
+              <option value="video">出视频（图生视频）</option>
+            </select>
+          </label>
+        </div>
+        <label class="chk"><input type="checkbox" id="gen-detail" checked> 精细模式：参考图局部放大分析，并让 AI 对照需求和参考图自检一遍（更准，但慢一些）</label>
+        <div class="row buttons" style="margin-top: 14px; gap: 8px;">
+          <button id="gen-btn" class="primary" style="flex: 2;">✨ 生成提示词</button>
+          <button type="button" id="btn-draw-gemini" class="draw-direct-btn gemini-draw" title="直连 Gemini Web 网页版或直接出图">
+            🎨 接入 Gemini
+          </button>
+          <button type="button" id="btn-draw-gpt" class="draw-direct-btn gpt-draw" title="直连 ChatGPT 网页版预填直接出图">
+            ⚡ 接入 GPT
+          </button>
+        </div>
+        <label>本次用哪个模型写（不改设置里的默认模型）
+          <select id="gen-llm"><option value="">按设置里的默认模型</option></select>
+        </label>
+        <div id="gen-status" class="status"></div>
+      </div>
+      <div class="panel" id="gen-result"><div class="muted">生成结果会显示在这里：图片分析 → 参考的案例 → 最终提示词。</div></div>
+    </div>
+    <h3>历史记录</h3>
+    <div id="gen-history" class="history"></div>
+  </section>
+
+  <!-- 反推提示词 -->
+  <section id="tab-reverse" class="tab">
+    <div class="two-col">
+      <div class="panel">
+        <h2>图片 / 视频 → 反推提示词</h2>
+        <p class="muted">AI 逆向分析画面，再按目标模型的写法写出能复现它的提示词。视频会自动均匀抽取关键帧，按时间顺序分析动作和运镜。</p>
+        <div class="drop" id="rev-drop">
+          <input type="file" accept="image/*,video/*" hidden>
+          <div class="drop-hint">点击、拖拽或 Ctrl/⌘+V 粘贴图片或视频（视频不超过 100MB）</div>
+          <img alt="" hidden>
+          <video muted controls playsinline hidden></video>
+          <button class="clear" type="button" hidden>移除</button>
+        </div>
+        <label>或者填链接（图片地址，或 .mp4 等视频文件地址）<input id="rev-url" placeholder="https://…"></label>
+        <div class="row">
+          <label>目标模型（决定提示词写法）<input id="rev-model" list="rev-models" placeholder="如 GPT Image 2 / Seedance 2.0"></label>
+          <datalist id="rev-models">
+            <option value="GPT Image 2"><option value="Nano Banana Pro"><option value="Midjourney"><option value="FLUX">
+            <option value="Seedance 2.0"><option value="Seedance 2.5"><option value="可灵 3.0"><option value="Veo 3"><option value="即梦"><option value="海螺">
+          </datalist>
+          <label>输出语言
+            <select id="rev-lang">
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+              <option value="both">中英双语</option>
+            </select>
+          </label>
+          <label>用途
+            <select id="rev-output">
+              <option value="auto">自动（图片出图，视频出视频）</option>
+              <option value="image">出图</option>
+              <option value="video">出视频（图生视频）</option>
+            </select>
+          </label>
+          <label>视频抽帧数
+            <select id="rev-frames"><option>6</option><option selected>8</option><option>12</option></select>
+          </label>
+        </div>
+        <label>补充说明（可选）<textarea id="rev-hint" rows="3" placeholder="例如：重点还原人物服装和光线；忽略右下角水印"></textarea></label>
+        <label class="chk"><input type="checkbox" id="rev-detail" checked> 精细反推：局部放大看细节，并让 AI 对照原图自检一遍（更准，但慢一倍左右）</label>
+        <button id="rev-btn" class="primary">开始反推</button>
+        <label class="pick">本次用哪个模型反推（不改设置里的默认模型）<select id="rev-llm"><option value="">按设置里的默认模型</option></select></label>
+        <div id="rev-status" class="status"></div>
+      </div>
+      <div class="panel" id="rev-result"><div class="muted">反推结果会显示在这里：抽帧预览 → 提示词 → 分镜（视频）→ 参考案例。</div></div>
+    </div>
+    <h3>反推记录</h3>
+    <div id="rev-history" class="history"></div>
+  </section>
+
+  <!-- 添加 -->
+  <section id="tab-add" class="tab">
+    <div class="panel narrow">
+      <h2 id="add-heading">添加提示词到库</h2>
+      <div class="drop" id="add-drop">
+        <input type="file" accept="image/*" hidden>
+        <div class="drop-hint">点击、拖拽或 Ctrl/⌘+V 粘贴效果图</div>
+        <img alt="" hidden>
+        <button class="clear" type="button" hidden>移除</button>
+      </div>
+      <label>标题 *<input id="a-title"></label>
+      <label>提示词 *<textarea id="a-prompt" rows="10"></textarea></label>
+      <div class="row">
+        <label>类别<select id="a-cat"><option value="">未分类</option></select></label>
+        <label>细分类<select id="a-sub"><option value="">未选择</option></select></label>
+      </div>
+      <div class="row">
+        <label>子类型（自由填写）<input id="a-subtype" placeholder="如：城市宣传海报 · 国潮S型"></label>
+        <label>模型<input id="a-model" list="model-list" placeholder="如 GPT Image 2 / Nano Banana Pro"></label>
+        <datalist id="model-list"></datalist>
+      </div>
+      <label>标签（逗号分隔）<input id="a-tags"></label>
+      <label>结构分析 / 可复用技巧<textarea id="a-analysis" rows="4"></textarea></label>
+      <div class="row">
+        <label>来源链接<input id="a-url"></label>
+        <label>备注<input id="a-note"></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="a-fav"> 收藏（生成提示词时优先参考）</label>
+      <div class="row buttons">
+        <button id="a-auto" type="button">🤖 AI 自动归类与分析</button>
+        <button id="a-save" class="primary" type="button">保存</button>
+        <button id="a-reset" type="button">清空</button>
+      </div>
+      <div id="a-status" class="status"></div>
+    </div>
+  </section>
+
+  <!-- 模板 -->
+  <section id="tab-templates" class="tab">
+    <div class="tpl">
+      <aside id="tpl-list"></aside>
+      <article id="tpl-body" class="md"></article>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section id="tab-settings" class="tab">
+    <div class="panel narrow">
+      <h2>模型接口（OpenAI 兼容）</h2>
+      <p class="muted">支持 OpenAI、Gemini（OpenAI 兼容地址）、通义千问、智谱、豆包、DeepSeek、OpenRouter、本地 Ollama 等所有兼容 <code>/chat/completions</code> 的接口。看图需要选支持视觉的模型。</p>
+      <label>接口地址 Base URL<input id="s-base" placeholder="https://api.openai.com/v1"></label>
+      <label>API Key<input id="s-key" type="password" autocomplete="off" placeholder="留空表示不修改"></label>
+      <div id="s-key-hint" class="muted"></div>
+      <label>模型<input id="s-model" placeholder="例如 gpt-4o、qwen-vl-max、gemini-2.5-flash"></label>
+      <label>视觉模型（可选，留空则使用上面的模型）<input id="s-vmodel"></label>
+      <label>温度（可选，留空使用模型默认值）<input id="s-temp" placeholder="例如 0.5"></label>
+      <label>输出上限 max_tokens（可选，留空 = 不限制，推荐留空）<input id="s-maxtok" placeholder="留空即可；思考型模型带上限容易被截断"></label>
+      <label>备用模型（可选，主模型被内容策略拒绝时自动改用）<input id="s-fallback" placeholder="例如 anthropic/claude-sonnet-5"></label>
+
+      <h3>批量标注接口（可选）</h3>
+      <p class="muted">给全库重新归类打标签用，量大但不需要看图，可以单独填一个便宜或免费的接口，不影响上面的生成和反推。<br>
+      OpenRouter 免费模型：地址填 <code>https://openrouter.ai/api/v1</code>，模型填带 <code>:free</code> 结尾的（多个用逗号分隔，前一个限流就自动换下一个）。免费额度为每分钟 20 次、每天 1000 次（账号需累计充值过 10 美元，否则每天只有 50 次）。</p>
+      <label>标注接口地址<input id="s-tbase" placeholder="https://openrouter.ai/api/v1"></label>
+      <label>标注接口 API Key<input id="s-tkey" type="password" autocomplete="off" placeholder="留空表示不修改"></label>
+      <div id="s-tkey-hint" class="muted"></div>
+      <label>标注模型<input id="s-tmodel" placeholder="例如 nex-agi/nex-n2.5-pro:free,z-ai/glm-5.2:free"></label>
+      <div class="row buttons">
+        <button id="s-save" class="primary" type="button">保存</button>
+        <button id="s-test" type="button">测试连接</button>
+      </div>
+      <div id="s-status" class="status"></div>
+      <p class="muted">配置保存在本机的 <code>data/library.db</code>，不会上传到任何地方。</p>
+    </div>
+
+    <div class="panel narrow" id="drive-panel" style="margin-top:16px">
+      <h2>Google 云盘（存放图片和视频）</h2>
+      <p class="muted">把库里的图片和视频上传到你的 Google 云盘「提示词库媒体」文件夹，之后优先从云盘读取；云盘里还没有的仍用原链接。只申请 <code>drive.file</code> 权限，只能访问本应用自己创建的文件，碰不到你云盘里的其他内容。</p>
+      <details>
+        <summary>第一次使用：创建 Google OAuth 凭据（约 5 分钟）</summary>
+        <ol>
+          <li>打开 <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud 控制台</a>，新建一个项目（名称随意，例如“提示词库”）。</li>
+          <li>在 <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Google Drive API</a> 页面点「启用」。</li>
+          <li>打开 <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">OAuth 同意屏幕（Google Auth Platform）</a>：应用名称随意，用户类型选「外部」，填你的邮箱。然后在「目标对象」里点「发布应用」改为正式版——不发布的话授权每 7 天会失效（只用 drive.file 权限，发布不需要 Google 审核）。</li>
+          <li>打开 <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener">客户端</a> →「创建客户端」，应用类型选<b>「桌面应用」</b>，创建后点「下载 JSON」。</li>
+          <li>把下载的 JSON 文件内容粘贴到下面，点「保存凭据」，再点「连接 Google 云盘」，在 Google 页面登录你的账号并允许。</li>
+        </ol>
+      </details>
+      <label>客户端 ID<input id="d-client-id" autocomplete="off" placeholder="xxxx.apps.googleusercontent.com"></label>
+      <label>客户端密钥<input id="d-client-secret" type="password" autocomplete="off" placeholder="留空表示不修改"></label>
+      <label>或者直接粘贴下载的凭据 JSON<textarea id="d-json" rows="3" placeholder='{"installed":{"client_id":"…","client_secret":"…"}}'></textarea></label>
+      <div class="row buttons">
+        <button id="d-save" type="button">保存凭据</button>
+        <button id="d-connect" class="primary" type="button">连接 Google 云盘</button>
+        <button id="d-disconnect" class="danger" type="button" hidden>断开连接</button>
+      </div>
+      <div id="drive-status" style="margin-top:12px"></div>
+      <div class="row buttons">
+        <button id="d-sync" class="primary" type="button" disabled>开始同步</button>
+        <button id="d-stop" type="button" disabled>暂停</button>
+      </div>
+      <div id="d-msg" class="status"></div>
+      <p class="muted">同步会跳过“网页地址”类的视频链接（例如 X 帖子），这类视频只保留原链接。云盘空间用到 95% 时会自动暂停。</p>
+    </div>
+  </section>
+</main>
+
+<div id="ai-drawer" class="ai-drawer" hidden>
+  <div class="ai-drawer-header">
+    <div class="ai-drawer-title">
+      <span id="ai-drawer-provider-icon">⚡</span>
+      <span id="ai-drawer-provider-name">网页版 AI 实时直连</span>
+      <span class="ai-drawer-badge" id="ai-drawer-status">就绪</span>
+    </div>
+    <div class="ai-drawer-controls">
+      <button type="button" class="ai-drawer-pop-btn" id="ai-drawer-external-link" title="在新标签页全屏打开">↗ 浏览器独立窗口</button>
+      <button type="button" class="ai-drawer-close" id="ai-drawer-close-btn">×</button>
+    </div>
+  </div>
+  <div class="ai-drawer-body">
+    <div class="ai-drawer-prompt-bar">
+      <div class="ai-drawer-prompt-text" id="ai-drawer-current-prompt"></div>
+      <button type="button" class="ai-drawer-copy-btn" id="ai-drawer-prompt-copy">复制整段</button>
+    </div>
+    <div class="ai-drawer-bridge-notice">
+      <p>💡 <b>官方防点击劫持（X-Frame-Options）安全机制说明：</b><br>
+      OpenAI 和 Google 官方限制了三方网页内通过普通 iframe 嵌入对话框。系统已通过后台 CDP 协议准备就绪：<br>
+      点击下方 <b>「立即唤起」</b> 即可调用你本机 Chrome 中已登录的 ChatGPT/Gemini 账号直接生成！出图后在生图右键「复制图片」，点击我们卡片上的 <b>「🖼 贴入效果图」</b> 即可秒级存入你的提示词库。</p>
+    </div>
+    <div class="ai-drawer-action-row">
+      <button type="button" class="primary pp-copy-banner-btn" id="ai-drawer-launch-btn">🚀 立即发送提示词并启动官方生图</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-box">
+    <button class="modal-close" type="button">×</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- 全屏图片放大灯箱 (Apple Lightbox with Frosted Glass) -->
+<div id="img-lightbox" class="lightbox-modal" hidden>
+  <button class="lightbox-close" type="button" title="关闭大图 (Esc)">×</button>
+  <div class="lightbox-wrap">
+    <img id="lightbox-img" src="" alt="放大图片">
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/pigments.js?v=1789886551000"></script>
+<script src="/app.js?v=1789901155547"></script>
+</body>
+</html>
